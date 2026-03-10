@@ -1,0 +1,61 @@
+{
+    "manifest_version": 3,
+    "name": "TTS Reader",
+    "version": "0.1.0",
+    "default_locale": "en",
+    "description": "__MSG_desc__",
+
+    "icons": {
+        "16": "images/ttsreader_smallicon.png",
+        "128": "images/ttsreader_bigicon.png"
+    },
+
+    "action": {
+        "default_icon": "images/ttsreader_smallicon.png",
+        "default_popup": "popup.html",
+        "default_title": "__MSG_title__"
+    },
+
+    "background": {
+        "service_worker": "js/background.js",
+        "type": "module"
+    },
+
+    "options_page": "options.html",
+
+    "permissions": [
+        "contextMenus",
+        "tts",
+        "ttsEngine",
+        "tabs",
+        "scripting"
+    ],
+
+    "host_permissions": [
+        "<all_urls>"
+    ],
+
+    "content_scripts": [
+        {
+            "all_frames": true,
+            "js": [
+                "js/inline_controls.js"
+            ],
+            "matches": [
+                "<all_urls>"
+            ],
+            "run_at": "document_end"
+        }
+    ],
+
+    "tts_engine": {
+        "voices": [
+            {
+                "voice_name": "Google TTS",
+                "lang": "en-US",
+                "gender": "female",
+                "event_types": ["start", "marker", "end"]
+            }
+        ]
+    }
+}

@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+
+<head>
+	<title>TTS Reader</title>
+	<meta charset="utf-8" />
+	<link rel="stylesheet" href="css/reset.css">
+	<link rel="stylesheet" href="css/style.css">
+	<link rel="stylesheet" href="css/zen.css">
+</head>
+
+<body>
+	<div id="reload" title="STOP"> </div>
+	<div id="reload_back"> </div>
+
+	<canvas width="150px" height="150px" id="volume"> </canvas>
+	<div id="zen">
+		<span class="player"></span>
+		<span id="circle" class="circle"></span>
+		<span id="progress" class="progress"></span>
+		<span class="drag"></span>
+		<div id="button" class="button">
+			<span id="pause" class="icon pause"></span>
+			<span id="play" class="icon play"></span>
+			<span id="replay" class="icon replay"></span>
+		</div>
+	</div>
+
+	<div id="lang-controls">
+		<label for="language-select">Language</label>
+		<select id="language-select">
+			<option value="en-IN">English</option>
+			<option value="hi-IN">हिन्दी (Hindi)</option>
+		</select>
+	</div>
+
+	<div id="page-controls">
+		<button id="read-selection-btn" class="btn-primary" title="Read selected text">Read selection</button>
+		<button id="read-page-btn" class="btn-accent" title="Read cleaned main content of page">Read page</button>
+		<button id="pause-btn" class="btn-warn" title="Pause reading">⏸</button>
+		<button id="resume-btn" class="btn-success" title="Resume reading">▶</button>
+	</div>
+
+	<div id="error">Can't hear anything? Click here!</div>
+	<script type="text/javascript" src="js/popup.js"></script>
+</body>
+
+</html>

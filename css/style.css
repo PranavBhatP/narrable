@@ -1,0 +1,117 @@
+
+/*
+
+	Just the page style, if you're looking for the player, see zen.css
+
+*/
+
+
+/* globals */
+
+body {
+	margin: 0px;
+	text-align: center;
+	padding: 5px;
+	font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	background: #0f172a;
+	color: #e5e7eb;
+}
+
+
+
+/* player */
+
+#zen {
+	margin:0px;
+}
+
+#error {
+	display: none;
+	cursor: pointer;
+	margin: 5px 0px 5px 0px;
+}
+
+#lang-controls {
+	margin-top: 90px;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	gap: 6px;
+	font-size: 11px;
+	color: #cbd5f5;
+}
+
+#language-select {
+	background: #020617;
+	color: #e5e7eb;
+	border-radius: 999px;
+	border: 1px solid #4b5563;
+	padding: 2px 8px;
+	font-size: 11px;
+}
+
+#page-controls {
+	margin-top: 8px;
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 6px;
+}
+
+#page-controls button {
+	border-radius: 999px;
+	padding: 4px 9px;
+	border: none;
+	background: #374151;
+	color: #e5e7eb;
+	font-size: 11px;
+	cursor: pointer;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+	white-space: nowrap;
+}
+
+#page-controls button:hover {
+	opacity: 0.9;
+}
+
+.btn-primary {
+	background: #2563eb;
+}
+
+.btn-accent {
+	background: #7c3aed;
+}
+
+.btn-warn {
+	background: #ea580c;
+}
+
+.btn-success {
+	background: #16a34a;
+}
+
+#reload
+{
+	width:14px;
+	height:14px;
+	position: absolute;
+	top:14px;
+	left:16px;
+	background: #5D5D5D;
+	z-index: 999;
+	cursor:pointer;
+	border-radius: 2px;
+	box-shadow: 0px 1px 0px rgba(0,0,0,.1);
+}
+#reload_back
+{
+	top:0px;
+	left:0px;
+	width:50px;
+	height:50px;
+	z-index: -999;
+	position: absolute;
+	background: #EDEDED;
+	border-radius: 40px;
+	opacity: 1;
+}
