@@ -1,10 +1,21 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import mammoth from "mammoth";
 import axios from "axios";
 import * as pdfjsLib from "pdfjs-dist";
 import workerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+
+type SpeechRecognitionLike = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: any) => void) | null;
+  onerror: ((event: any) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
 
 type Settings = {
   fontSize: number;
@@ -29,8 +40,8 @@ const fontOptions = [
 ];
 
 const aiModels = [
-  { label: "GPT-OSS 20B (Free)", value: "openai/gpt-oss-20b:free" },
-  { label: "DeepSeek (Free)", value: "deepseek/deepseek-r1:free" },
+  { label: "Gemma 4", value: "google/gemma-4-26b-a4b-it:free" },
+  { label: "DeepSeek", value: "deepseek/deepseek-r1:free" },
 ];
 
 const narrationLanguages = [
@@ -49,6 +60,10 @@ function splitSentences(text: string): string[] {
     .split(/(?<=[.?!])\s+|\n+/)
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+function includesAnyCommand(text: string, words: string[]): boolean {
+  return words.some((word) => text.includes(word));
 }
 
 async function readFileText(file: File): Promise<string> {
@@ -75,6 +90,7 @@ async function readFileText(file: File): Promise<string> {
 }
 
 export default function App() {
+  const magnifierSize = 180;
   const [rawText, setRawText] = useState("");
   const [status, setStatus] = useState("Upload a PDF, DOCX, or TXT file to begin.");
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -98,8 +114,33 @@ export default function App() {
     if (saved) return saved === "dark";
     return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
+  const [magnifierEnabled, setMagnifierEnabled] = useState(true);
+  const [magnifierZoom, setMagnifierZoom] = useState(2);
+  const [voiceCommandsEnabled, setVoiceCommandsEnabled] = useState(false);
+  const [voiceCommandStatus, setVoiceCommandStatus] = useState("Voice commands are off.");
+  const [magnifierState, setMagnifierState] = useState({
+    visible: false,
+    x: 0,
+    y: 0,
+    contentX: 0,
+    contentY: 0,
+    width: 0,
+    contentWidth: 0,
+  });
   const activeUtterance = useRef<SpeechSynthesisUtterance | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const shouldListenRef = useRef(false);
+  const isSpeakingRef = useRef(false);
+  const isPausedRef = useRef(false);
+  const sentencesCountRef = useRef(0);
+  const startNarrationRef = useRef<() => void>(() => {});
+  const pauseNarrationRef = useRef<() => void>(() => {});
+  const resumeNarrationRef = useRef<() => void>(() => {});
+  const stopRef = useRef<() => void>(() => {});
   const liveRegionRef = useRef<HTMLParagraphElement>(null);
+  const readingRef = useRef<HTMLElement | null>(null);
+  const previewTextRef = useRef<HTMLParagraphElement | null>(null);
+  const isVoiceRecognitionSupported = typeof window !== "undefined" && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
 
   const sentences = useMemo(() => splitSentences(rawText), [rawText]);
   const activeSentence = sentences[currentIndex] ?? "";
@@ -107,6 +148,12 @@ export default function App() {
     () => voices.filter((voice) => voice.lang?.toLowerCase().startsWith(narrationLang.split("-")[0].toLowerCase())),
     [voices, narrationLang],
   );
+
+  useEffect(() => {
+    isSpeakingRef.current = isSpeaking;
+    isPausedRef.current = isPaused;
+    sentencesCountRef.current = sentences.length;
+  }, [isSpeaking, isPaused, sentences.length]);
 
   useEffect(() => {
     localStorage.setItem("narrable-web-settings", JSON.stringify(settings));
@@ -220,6 +267,133 @@ export default function App() {
     }
   };
 
+  const pauseNarration = () => {
+    if (!isSpeakingRef.current || isPausedRef.current) return;
+    speechSynthesis.pause();
+    setIsPaused(true);
+    announce("Narration paused.");
+  };
+
+  const resumeNarration = () => {
+    if (!isSpeakingRef.current || !isPausedRef.current) return;
+    speechSynthesis.resume();
+    setIsPaused(false);
+    announce("Narration resumed.");
+  };
+
+  useEffect(() => {
+    startNarrationRef.current = startNarration;
+    pauseNarrationRef.current = pauseNarration;
+    resumeNarrationRef.current = resumeNarration;
+    stopRef.current = stop;
+  }, [startNarration, pauseNarration, resumeNarration, stop]);
+
+  const runVoiceCommand = (transcript: string) => {
+    const command = transcript.toLowerCase().trim().replace(/[^\w\s]/g, " ");
+    if (!command) return;
+    setVoiceCommandStatus(`Heard: "${transcript}"`);
+    const playWords = ["play", "start", "read", "begin", "go", "continue", "continue reading"];
+    const pauseWords = ["pause", "hold", "wait", "stop reading", "take a break", "freeze", "pose", "paws"];
+    const resumeWords = ["resume", "continue", "go on", "carry on", "unpause"];
+    const stopWords = ["stop", "end", "finish", "quit", "terminate", "cancel", "shut down"];
+
+    if (includesAnyCommand(command, playWords)) {
+      if (!sentencesCountRef.current) {
+        announce("No document loaded yet.");
+        setVoiceCommandStatus(`Heard "${transcript}", but no document is loaded.`);
+        return;
+      }
+      startNarrationRef.current();
+      setVoiceCommandStatus(`Heard "${transcript}". Starting narration.`);
+      return;
+    }
+    if (includesAnyCommand(command, resumeWords)) {
+      if (isSpeakingRef.current && isPausedRef.current) {
+        resumeNarrationRef.current();
+        setVoiceCommandStatus(`Heard "${transcript}". Resuming.`);
+      } else {
+        setVoiceCommandStatus(`Heard "${transcript}", but narration is not paused.`);
+      }
+      return;
+    }
+    if (includesAnyCommand(command, pauseWords)) {
+      if (isSpeakingRef.current && !isPausedRef.current) {
+        pauseNarrationRef.current();
+        setVoiceCommandStatus(`Heard "${transcript}". Pausing.`);
+      } else {
+        setVoiceCommandStatus(`Heard "${transcript}", but narration is not currently playing.`);
+      }
+      return;
+    }
+    if (includesAnyCommand(command, stopWords)) {
+      stopRef.current();
+      setVoiceCommandStatus(`Heard "${transcript}". Stopping narration.`);
+      return;
+    }
+    setVoiceCommandStatus(`Heard "${transcript}", but command was not recognized.`);
+  };
+
+  useEffect(() => {
+    if (!isVoiceRecognitionSupported) {
+      setVoiceCommandStatus("Voice commands are not supported in this browser.");
+      return;
+    }
+    const SpeechRecognitionCtor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const recognition: SpeechRecognitionLike = new SpeechRecognitionCtor();
+    recognition.lang = narrationLang;
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.onresult = (event: any) => {
+      const result = event.results?.[event.results.length - 1];
+      const transcript = result?.[0]?.transcript?.trim() || "";
+      runVoiceCommand(transcript);
+    };
+    recognition.onerror = (event: any) => {
+      if (!shouldListenRef.current) return;
+      setVoiceCommandStatus(`Voice command error: ${event.error || "unknown error"}.`);
+    };
+    recognition.onend = () => {
+      if (!shouldListenRef.current) return;
+      try {
+        recognition.start();
+      } catch {
+        setVoiceCommandStatus("Voice commands paused. Please enable again.");
+        shouldListenRef.current = false;
+        setVoiceCommandsEnabled(false);
+      }
+    };
+    recognitionRef.current = recognition;
+    return () => {
+      shouldListenRef.current = false;
+      recognition.onend = null;
+      recognition.onerror = null;
+      recognition.onresult = null;
+      recognition.stop();
+    };
+  }, [isVoiceRecognitionSupported, narrationLang]);
+
+  useEffect(() => {
+    if (!isVoiceRecognitionSupported) return;
+    const recognition = recognitionRef.current;
+    if (!recognition) return;
+    if (voiceCommandsEnabled) {
+      shouldListenRef.current = true;
+      recognition.lang = narrationLang;
+      try {
+        recognition.start();
+        setVoiceCommandStatus(`Listening for commands in ${narrationLang}. Say play, pause, resume, or stop.`);
+      } catch {
+        setVoiceCommandStatus("Microphone access failed. Check browser permissions.");
+        shouldListenRef.current = false;
+        setVoiceCommandsEnabled(false);
+      }
+    } else {
+      shouldListenRef.current = false;
+      recognition.stop();
+      setVoiceCommandStatus("Voice commands are off.");
+    }
+  }, [voiceCommandsEnabled, narrationLang, isVoiceRecognitionSupported]);
+
   const askAI = async () => {
     if (!activeSentence) return;
     setAiBusy(true);
@@ -231,12 +405,55 @@ export default function App() {
       });
       setAiResponse(response.data?.output || "No response.");
     } catch (error: any) {
-      const details = error?.response?.data?.details || error?.response?.data?.error;
-      setAiResponse(details || "AI request failed. Verify server, API key, or selected model availability.");
+      const responseData = error?.response?.data;
+      const statusText = error?.response?.status ? ` (HTTP ${error.response.status})` : "";
+      const responseMessage =
+        responseData?.details ||
+        responseData?.error?.message ||
+        responseData?.error ||
+        responseData?.message ||
+        (typeof responseData === "string" ? responseData : "");
+      const networkMessage = error?.message || "Unknown request error.";
+      setAiResponse(
+        responseMessage
+          ? `AI request failed${statusText}: ${responseMessage}`
+          : `AI request failed${statusText}: ${networkMessage}`,
+      );
     } finally {
       setAiBusy(false);
     }
   };
+
+  const handleReadingPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!magnifierEnabled || !sentences.length) return;
+    const container = readingRef.current;
+    const previewText = previewTextRef.current;
+    if (!container || !previewText) return;
+    const bounds = container.getBoundingClientRect();
+    const previewBounds = previewText.getBoundingClientRect();
+    const x = event.clientX - bounds.left;
+    const y = event.clientY - bounds.top;
+    const isWithinText =
+      event.clientX >= previewBounds.left &&
+      event.clientX <= previewBounds.right &&
+      event.clientY >= previewBounds.top &&
+      event.clientY <= previewBounds.bottom;
+    if (!isWithinText) {
+      setMagnifierState((current) => ({ ...current, visible: false }));
+      return;
+    }
+    const contentX = event.clientX - previewBounds.left;
+    const contentY = event.clientY - previewBounds.top;
+    setMagnifierState({ visible: true, x, y, contentX, contentY, width: bounds.width, contentWidth: previewBounds.width });
+  };
+
+  const hideMagnifier = () => {
+    setMagnifierState((current) => ({ ...current, visible: false }));
+  };
+
+  const maxLensLeft = Math.max(8, magnifierState.width - magnifierSize - 8);
+  const lensLeft = Math.max(8, Math.min(magnifierState.x - magnifierSize / 2, maxLensLeft));
+  const lensTop = Math.max(8, magnifierState.y - magnifierSize - 16);
 
   return (
     <main className={`app${isDarkMode ? " app-dark" : ""}${settings.highContrast ? " app-contrast" : ""}`}>
@@ -323,6 +540,18 @@ export default function App() {
           <label htmlFor="sentence-range">Sentence <span className="value">{sentences.length ? `${currentIndex + 1}/${sentences.length}` : "0/0"}</span>
             <input id="sentence-range" type="range" min="0" max={Math.max(sentences.length - 1, 0)} value={currentIndex} onChange={(e) => setCurrentIndex(Number(e.target.value))} />
           </label>
+          <div className="voice-command-panel" role="group" aria-label="Voice commands">
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={voiceCommandsEnabled}
+                disabled={!isVoiceRecognitionSupported}
+                onChange={(e) => setVoiceCommandsEnabled(e.target.checked)}
+              />
+              Voice commands (play, pause, resume, stop)
+            </label>
+            <p className="voice-command-status">{voiceCommandStatus}</p>
+          </div>
         </article>
 
         <article className="card">
@@ -344,6 +573,30 @@ export default function App() {
             ))}
           </select>
           <label className="toggle"><input type="checkbox" checked={settings.highContrast} onChange={(e) => setSettings((s) => ({ ...s, highContrast: e.target.checked }))} /> High contrast mode</label>
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={magnifierEnabled}
+              onChange={(e) => {
+                setMagnifierEnabled(e.target.checked);
+                if (!e.target.checked) hideMagnifier();
+              }}
+            />{" "}
+            Floating magnifier
+          </label>
+          <label htmlFor="magnifier-zoom">
+            Magnifier zoom <span className="value">{magnifierZoom.toFixed(1)}x</span>
+            <input
+              id="magnifier-zoom"
+              type="range"
+              min="1.5"
+              max="3"
+              step="0.1"
+              value={magnifierZoom}
+              onChange={(e) => setMagnifierZoom(Number(e.target.value))}
+              disabled={!magnifierEnabled}
+            />
+          </label>
         </article>
 
         <article className="card ai-card">
@@ -361,13 +614,52 @@ export default function App() {
         </article>
         </section>
 
-        <section className="card reading" style={{ fontSize: `${settings.fontSize}px`, lineHeight: settings.lineHeight, fontFamily: settings.fontFamily }}>
+        <section
+          ref={readingRef}
+          className="card reading"
+          onPointerEnter={handleReadingPointerMove}
+          onPointerMove={handleReadingPointerMove}
+          onPointerLeave={hideMagnifier}
+          style={{ fontSize: `${settings.fontSize}px`, lineHeight: settings.lineHeight, fontFamily: settings.fontFamily }}
+        >
           <h2>Document Preview</h2>
           {sentences.length ? (
-            <p>{sentences.map((sentence, i) => (<span key={`${sentence}-${i}`} className={i === currentIndex ? "active-sentence" : ""}>{sentence} </span>))}</p>
+            <p ref={previewTextRef} className="preview-text">{sentences.map((sentence, i) => (<span key={`${sentence}-${i}`} className={i === currentIndex ? "active-sentence" : ""}>{sentence} </span>))}</p>
           ) : (
             <p>No content yet.</p>
           )}
+          {magnifierEnabled && magnifierState.visible && sentences.length > 0 ? (
+            <div
+              className="magnifier-lens"
+              style={{ width: `${magnifierSize}px`, height: `${magnifierSize}px`, left: `${lensLeft}px`, top: `${lensTop}px` }}
+              aria-hidden="true"
+            >
+              <div
+                className="magnifier-content"
+                style={{
+                  width: `${magnifierSize}px`,
+                  height: `${magnifierSize}px`,
+                  fontSize: `${settings.fontSize}px`,
+                  lineHeight: settings.lineHeight,
+                  fontFamily: settings.fontFamily,
+                }}
+              >
+                <p
+                  className="preview-text"
+                  style={{
+                    width: `${magnifierState.contentWidth}px`,
+                    transform: `translate(${magnifierSize / 2 - magnifierState.contentX * magnifierZoom}px, ${magnifierSize / 2 - magnifierState.contentY * magnifierZoom}px) scale(${magnifierZoom})`,
+                  }}
+                >
+                  {sentences.map((sentence, i) => (
+                    <span key={`magnified-${sentence}-${i}`} className={i === currentIndex ? "active-sentence" : ""}>
+                      {sentence}{" "}
+                    </span>
+                  ))}
+                </p>
+              </div>
+            </div>
+          ) : null}
         </section>
       </section>
     </main>
