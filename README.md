@@ -1,36 +1,61 @@
-# Narrable: An accessibility platform for enhancing readability
-Chrome text-to-speech extension focused on accessibility and improved readability.
+# Narrable
 
-## Features
-- **Read selected text**: Highlight any text in Chrome and have Narrable read it aloud.
-- **Read the whole page**: Trigger reading for the full page content when you do not have a selection.
-- **Playback controls**: Play, pause, resume, replay, and adjust volume directly from the popup.
-- **Sentence-based reading**: Text is split into sentences for smoother, more natural playback and progress tracking.
-- **Language selection**: Choose from available voices/languages (using Chrome TTS) from the popup.
-- **Context menu shortcut**: Optional context-menu entry to quickly send selected text to Narrable.
-- **Options for tuning speech**: Configure rate, pitch, volume, keyboard shortcuts, and other playback options on the options page.
+Narrable is an accessibility-focused reading platform with:
+- a **Chrome extension** for reading webpage selections or main page content aloud
+- a **web reader** for uploaded documents with AI-assisted comprehension tools
 
-## Narrable Website (React + Tailwind)
-This repository now also includes a web app for narrating uploaded files (`pdf`, `docx`, `txt`) with accessibility-first controls and AI assistance.
+## Repository structure
+- `manifest.json`, `js/`, `popup.html`, `options.html`: Chrome extension
+- `web/`: Vite + React + TypeScript + Tailwind web app
+- `server/`: Express backend proxy for AI assistance
 
-- Frontend: `web/` (Vite + React + Tailwind CSS)
-- Backend: `server/` (Express + OpenAI API proxy endpoints)
+## Chrome extension features
+- Read selected text or fallback to cleaned main-page content
+- Play/pause/resume/replay/stop controls in popup
+- Language switching from popup (`en-IN`, `hi-IN`)
+- Inline on-page playback bar with live progress
+- Context-menu shortcut: **Read selection with TTS Reader**
+- Options page for voice, rate, pitch, volume, testing, and keyboard shortcuts
 
-### Web app features
-- Upload and parse PDF, DOCX, and TXT documents.
-- Play/pause/resume/stop narration using browser speech synthesis.
-- Voice selection, rate and pitch controls, sentence progress slider.
-- Accessibility settings: high-contrast mode, dyslexia-friendly font, font size and line-height adjustments.
-- AI assistant panel for explain/summarize style prompts on the current sentence.
+## Web reader features
+- Upload and parse **PDF, DOCX, TXT**
+- Sentence-based narration with play/pause/resume/stop
+- Language + voice selection, rate/pitch tuning, sentence slider
+- Active-sentence highlighting in document preview
+- Accessibility controls:
+  - dark/light mode
+  - high contrast mode
+  - font family, font size, and line-height adjustments
+  - floating magnifier with zoom
+- Optional voice commands (play, pause, resume, stop) using browser speech recognition
+- AI assistant for the current sentence with selectable model and custom prompt
 
-### Run locally
-1. Start backend
-   - `cd server`
-   - Copy `.env.example` to `.env` and set `OPENAI_API_KEY`
-   - `npm install`
-   - `npm run dev`
-2. Start frontend
-   - `cd web`
-   - `npm install`
-   - `npm run dev`
-3. Open the Vite URL shown in terminal (usually `http://localhost:5173`).
+## Run locally
+
+### 1) Start backend (`server/`)
+```bash
+cd server
+cp .env.example .env
+# set OPENROUTER_API_KEY in .env
+npm install
+npm run dev
+```
+
+The server runs on `http://localhost:5050` by default and exposes:
+- `GET /health`
+- `POST /api/ai/assist`
+
+### 2) Start frontend (`web/`)
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Open the Vite URL shown in terminal (usually `http://localhost:5173`).
+
+## Load Chrome extension locally
+1. Open `chrome://extensions`
+2. Enable **Developer mode**
+3. Click **Load unpacked**
+4. Select this repository root folder
