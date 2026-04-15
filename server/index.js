@@ -10,10 +10,10 @@ app.use(express.json({ limit: "1mb" }));
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions";
 const allowedModels = new Set([
-  "deepseek/deepseek-r1:free",
   "meta-llama/llama-3.3-70b-instruct:free",
+  "openai/gpt-oss-120b:free",
 ]);
-const defaultModel = "google/gemma-4-26b-a4b-it:free";
+const defaultModel = "meta-llama/llama-3.3-70b-instruct:free";
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true });

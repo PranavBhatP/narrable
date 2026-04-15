@@ -40,9 +40,11 @@ const fontOptions = [
 ];
 
 const aiModels = [
-  { label: "Gemma 4", value: "google/gemma-4-26b-a4b-it:free" },
-  { label: "DeepSeek", value: "deepseek/deepseek-r1:free" },
+  { label: "Llama 3.3", value: "meta-llama/llama-3.3-70b-instruct:free" },
+  { label: "GPT-OSS 120b", value: "openai/gpt-oss-120b:free" },
 ];
+
+const defaultAiModel = aiModels[0].value;
 
 const narrationLanguages = [
   { label: "English (US)", value: "en-US" },
@@ -108,7 +110,7 @@ export default function App() {
   const [aiPrompt, setAiPrompt] = useState("Explain this section simply.");
   const [aiResponse, setAiResponse] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
-  const [aiModel, setAiModel] = useState("openai/gpt-oss-20b:free");
+  const [aiModel, setAiModel] = useState(defaultAiModel);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem("narrable-web-theme");
     if (saved) return saved === "dark";
